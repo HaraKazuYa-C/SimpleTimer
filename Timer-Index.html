@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>计时器</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'SDK_SC_Web 65W', 'Helvetica Neue', Arial, sans-serif;
+            background-color: transparent;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+        .bottom-bar {
+            background-color: rgba(255, 255, 255, 0.6);
+            padding: 10px 0;
+            width: 100%;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+        }
+        #countdown {
+            font-size: 4em;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .digit-box {
+            width: 0.9em;
+            height: 1.4em;
+            overflow: hidden;
+            position: relative;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            margin: 0 2px;
+        }
+        .digit-strip {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transition: top 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+        .digit {
+            height: 1.4em;
+            width: 100%;
+            text-align: center;
+            line-height: 1.4em;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .separator {
+            width: 0.2em;
+            text-align: center;
+            font-size: 0.8em;
+            line-height: 1.4em;
+        }
+        #settings-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        #settings-panel label {
+            display: block;
+            margin-bottom: 10px;
+        }
+        #settings-panel select, #settings-panel input[type="time"] {
+            width: 100%;
+            padding: 5px;
+            margin-top: 5px;
+        }
+        #settings-panel button {
+            margin-top: 10px;
+            padding: 5px 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="bottom-bar">
+        <div id="countdown">
+            <div class="digit-box"><div class="digit-strip" id="hours-tens"></div></div>
+            <div class="digit-box"><div class="digit-strip" id="hours-ones"></div></div>
+            <div class="separator">:</div>
+            <div class="digit-box"><div class="digit-strip" id="minutes-tens"></div></div>
+            <div class="digit-box"><div class="digit-strip" id="minutes-ones"></div></div>
+            <div class="separator">:</div>
+            <div class="digit-box"><div class="digit-strip" id="seconds-tens"></div></div>
+            <div class="digit-box"><div class="digit-strip" id="seconds-ones"></div></div>
+        </div>
+    </div>
+
+    <div id="settings-panel" style="display: none;">
+        <h2>设置</h2>
+        <label>
+            <input type="radio" name="countType" value="countdown" checked> 倒计时
+            <input type="radio" name="countType" value="countup"> 正计时
+        </label>
+        <br>
+        <label>目标时间: <input type="time" id="targetTime" value="19:30"></label>
+        <br>
+        <label>语言:
+            <select id="language">
+                <option value="zh-CN">中文</option>
+                <option value="ja-JP">日语</option>
+                <option value="en-US">英语</option>
+            </select>
+        </label>
+        <br>
+        <label>语音音色: <select id="voice"></select></label>
+        <br>
+        <button onclick="saveSettings()">保存设置</button>
+    </div>
+
+    <script>
+        let targetTime = new Date();
+        targetTime.setHours(19, 30, 0, 0);
+        let countType = 'countdown';
+        let language = 'zh-CN';
+        let selectedVoice = null;
+        let lastAnnouncementTime = null;
+
+        function createDigitStrip(elementId) {
+            const strip = document.getElementById(elementId);
+            for (let i = 0; i <= 9; i++) {
+                const digit = document.createElement('div');
+                digit.className = 'digit';
+                digit.textContent = i;
+                strip.appendChild(digit);
+            }
+        }
+
+        ['hours-tens', 'hours-ones', 'minutes-tens', 'minutes-ones', 'seconds-tens', 'seconds-ones'].forEach(createDigitStrip);
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'F2') {
+                const settingsPanel = document.getElementById('settings-panel');
+                settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+
+        function loadVoices() {
+            const voiceSelect = document.getElementById('voice');
+            voiceSelect.innerHTML = '';
+            speechSynthesis.getVoices().forEach(voice => {
+                if (voice.lang.startsWith(language)) {
+                    const option = document.createElement('option');
+                    option.value = voice.name;
+                    option.textContent = voice.name;
+                    voiceSelect.appendChild(option);
+                }
+            });
+        }
+
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+
+        loadVoices();
+
+        document.getElementById('language').addEventListener('change', function() {
+            language = this.value;
+            loadVoices();
+        });
+
+        function saveSettings() {
+            countType = document.querySelector('input[name="countType"]:checked').value;
+            const timeInput = document.getElementById('targetTime').value.split(':');
+            targetTime = new Date();
+            targetTime.setHours(parseInt(timeInput[0]), parseInt(timeInput[1]), 0, 0);
+            language = document.getElementById('language').value;
+            selectedVoice = speechSynthesis.getVoices().find(voice => voice.name === document.getElementById('voice').value);
+            document.getElementById('settings-panel').style.display = 'none';
+        }
+
+        function updateCountdown() {
+            const now = new Date();
+            let diff = countType === 'countdown' ? targetTime - now : now - targetTime;
+            
+            if (diff < 0 && countType === 'countdown') {
+                targetTime.setDate(targetTime.getDate() + 1);
+                diff = targetTime - now;
+            }
+            
+            const hours = Math.floor(diff / 3600000);
+            const minutes = Math.floor((diff % 3600000) / 60000);
+            const seconds = Math.floor((diff % 60000) / 1000);
+            
+            updateDigit('hours-tens', Math.floor(hours / 10));
+            updateDigit('hours-ones', hours % 10);
+            updateDigit('minutes-tens', Math.floor(minutes / 10));
+            updateDigit('minutes-ones', minutes % 10);
+            updateDigit('seconds-tens', Math.floor(seconds / 10));
+            updateDigit('seconds-ones', seconds % 10);
+
+            if (!lastAnnouncementTime || (now - lastAnnouncementTime >= 30000)) {
+                announceTime(hours, minutes, seconds);
+                lastAnnouncementTime = now;
+            }
+        }
+
+        function updateDigit(elementId, value) {
+            const strip = document.getElementById(elementId);
+            strip.style.top = `-${value * 1.4}em`;
+        }
+
+        function announceTime(hours, minutes, seconds) {
+            const now = new Date();
+            const currentTime = now.toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' });
+            let announcement = '';
+            
+            switch(language) {
+                case 'zh-CN':
+                    announcement = `当前时间是${currentTime}，`;
+                    announcement += countType === 'countdown' ? `距离目标时间还有` : `已经过去了`;
+                    if (hours > 0) announcement += `${hours}小时${minutes}分钟${seconds}秒。`;
+                    else if (minutes > 0) announcement += `${minutes}分钟${seconds}秒。`;
+                    else announcement += `${seconds}秒。`;
+                    break;
+                case 'ja-JP':
+                    announcement = `現在の時刻は${currentTime}です。`;
+                    announcement += countType === 'countdown' ? `目標時間まであと` : `経過時間は`;
+                    if (hours > 0) announcement += `${hours}時間${minutes}分${seconds}秒です。`;
+                    else if (minutes > 0) announcement += `${minutes}分${seconds}秒です。`;
+                    else announcement += `${seconds}秒です。`;
+                    break;
+                case 'en-US':
+                    announcement = `The current time is ${currentTime}. `;
+                    announcement += countType === 'countdown' ? `Time remaining: ` : `Time elapsed: `;
+                    if (hours > 0) announcement += `${hours} hours, ${minutes} minutes, and ${seconds} seconds.`;
+                    else if (minutes > 0) announcement += `${minutes} minutes and ${seconds} seconds.`;
+                    else announcement += `${seconds} seconds.`;
+                    break;
+            }
+
+            const utterance = new SpeechSynthesisUtterance(announcement);
+            utterance.lang = language;
+            if (selectedVoice) utterance.voice = selectedVoice;
+            speechSynthesis.speak(utterance);
+        }
+
+        setInterval(updateCountdown, 1000);
+        updateCountdown();
+
+        // 页面加载后立即进行一次播报
+        window.addEventListener('load', () => {
+            const now = new Date();
+            const diff = targetTime - now;
+            const hours = Math.floor(diff / 3600000);
+            const minutes = Math.floor((diff % 3600000) / 60000);
+            const seconds = Math.floor((diff % 60000) / 1000);
+            announceTime(hours, minutes, seconds);
+        });
+    </script>
+</body>
+</html>
